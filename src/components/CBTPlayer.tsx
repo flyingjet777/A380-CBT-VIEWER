@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { CBTFile } from '../types';
-import { HardDrive } from 'lucide-react';
+import { HardDrive, ChevronRight } from 'lucide-react';
 
 interface CBTPlayerProps {
   file: CBTFile | null;
@@ -114,6 +114,7 @@ export const CBTPlayer = React.memo<CBTPlayerProps>(({ file, allFiles }) => {
     player.style.width = "100%";
     player.style.height = "100%";
     player.style.backgroundColor = "#000000";
+    player.style.touchAction = "none"; // Direct touch to Ruffle
 
     console.log(`Loading SWF: ${file.name} (Signature: ${file.signature}, Size: ${file.data.byteLength} bytes)`);
 
@@ -122,16 +123,53 @@ export const CBTPlayer = React.memo<CBTPlayerProps>(({ file, allFiles }) => {
       allowScriptAccess: true,
       backgroundColor: "#000000",
       letterbox: "on",
-      base_url: window.location.origin // Ensure relative paths work
+      base_url: window.location.origin, // Ensure relative paths work
+      unmuteOverlay: "hidden", // Prevent overlay blocking
+      autoplay: "on",
+      preloader: false,
+      logLevel: "warn",
+      warnOnInsecureContent: false,
     }).then(() => {
         console.log("Ruffle load successful");
+        // Force focus to enable keyboard/touch navigation
+        player.focus();
     }).catch((err: any) => {
         console.error("Ruffle load error:", err);
     });
 
+    // Touch navigation helper for iPad/Touch devices
+    const handleTouchStart = (e: TouchEvent) => {
+      if (!playerRef.current) return;
+      
+      const touch = e.touches[0];
+      const width = containerRef.current?.clientWidth || window.innerWidth;
+      const height = containerRef.current?.clientHeight || window.innerHeight;
+      const x = touch.clientX;
+      const y = touch.clientY;
+
+      // Only handle if in the bottom-ish area where buttons usually are, or generally the sides
+      // To avoid double-triggering when actually hitting an internal button, 
+      // we only trigger if NOT hitting the bottom control bar area if we can guess it.
+      // But user said "touch screen to navigate", so let's do sides.
+      
+      const isRightSide = x > width * 0.7;
+      const isLeftSide = x < width * 0.3;
+      
+      if (isRightSide || isLeftSide) {
+        // e.preventDefault(); // Don't prevent, so Flash gets the touch too for sound unlocking
+        const direction = isRightSide ? 'next' : 'prev';
+        handleNavigation(direction);
+      }
+    };
+
+    containerRef.current.addEventListener('touchstart', handleTouchStart, { passive: true });
+
     return () => {
       // Restore fetch
       window.fetch = originalFetch;
+      if (containerRef.current) {
+        containerRef.current.removeEventListener('touchstart', handleTouchStart);
+      }
       if (playerRef.current) {
         playerRef.current.remove();
         playerRef.current = null;
@@ -173,43 +211,6 @@ export const CBTPlayer = React.memo<CBTPlayerProps>(({ file, allFiles }) => {
   return (
     <div className="relative w-full h-full bg-[#121212] flex items-center justify-center overflow-hidden">
       <div ref={containerRef} className="w-full h-full" />
-      
-      {/* Tap Navigation Zones (Invisible) */}
-      <div className="absolute inset-0 flex pointer-events-none z-10">
-        <div 
-          className="w-1/3 h-full pointer-events-auto cursor-w-resize active:bg-white/5 transition-colors" 
-          onClick={(e) => {
-            e.stopPropagation();
-            handleNavigation('prev');
-          }}
-          title="Previous Page"
-        />
-        <div className="flex-1" />
-        <div 
-          className="w-2/3 h-full pointer-events-auto cursor-e-resize active:bg-white/10 transition-colors" 
-          onClick={(e) => {
-            e.stopPropagation();
-            handleNavigation('next');
-          }}
-          title="Next Page"
-        />
-      </div>
-
-      {/* Touch Navigation HUD (Optional/Visual) */}
-      <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-10 opacity-0 md:group-hover:opacity-100 transition-opacity pointer-events-none md:pointer-events-auto">
-         <button 
-           onClick={() => handleNavigation('prev')}
-           className="w-12 h-12 bg-black/40 backdrop-blur-xl border border-white/10 rounded-full flex items-center justify-center text-white/50 hover:text-white pointer-events-auto active:scale-90 transition-all"
-         >
-           <ChevronRight className="w-6 h-6 rotate-180" />
-         </button>
-         <button 
-           onClick={() => handleNavigation('next')}
-           className="w-12 h-12 bg-black/40 backdrop-blur-xl border border-white/10 rounded-full flex items-center justify-center text-white/50 hover:text-white pointer-events-auto active:scale-90 transition-all"
-         >
-           <ChevronRight className="w-6 h-6" />
-         </button>
-      </div>
     </div>
   );
 });
