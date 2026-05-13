@@ -343,7 +343,7 @@ export default function App() {
               )}
 
               {selectedFile && (
-                <div className="absolute bottom-4 right-4 bg-black/20 backdrop-blur-sm px-3 py-1 rounded-md border border-white/5 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                <div className="absolute top-4 right-4 bg-black/20 backdrop-blur-sm px-3 py-1 rounded-md border border-white/5 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                   <div className="flex flex-col">
                     <span className="text-[8px] font-black text-brand-text-dim uppercase tracking-tighter">EMULATOR</span>
                     <span className="text-[10px] font-black text-brand-text uppercase italic tracking-tighter leading-none">VFS_SYNC</span>

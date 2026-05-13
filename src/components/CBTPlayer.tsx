@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { CBTFile } from '../types';
-import { HardDrive, ChevronRight } from 'lucide-react';
+import { HardDrive } from 'lucide-react';
 
 interface CBTPlayerProps {
   file: CBTFile | null;
@@ -114,7 +114,6 @@ export const CBTPlayer = React.memo<CBTPlayerProps>(({ file, allFiles }) => {
     player.style.width = "100%";
     player.style.height = "100%";
     player.style.backgroundColor = "#000000";
-    player.style.touchAction = "none"; // Direct touch to Ruffle
 
     console.log(`Loading SWF: ${file.name} (Signature: ${file.signature}, Size: ${file.data.byteLength} bytes)`);
 
@@ -123,53 +122,16 @@ export const CBTPlayer = React.memo<CBTPlayerProps>(({ file, allFiles }) => {
       allowScriptAccess: true,
       backgroundColor: "#000000",
       letterbox: "on",
-      base_url: window.location.origin, // Ensure relative paths work
-      unmuteOverlay: "hidden", // Prevent overlay blocking
-      autoplay: "on",
-      preloader: false,
-      logLevel: "warn",
-      warnOnInsecureContent: false,
+      base_url: window.location.origin // Ensure relative paths work
     }).then(() => {
         console.log("Ruffle load successful");
-        // Force focus to enable keyboard/touch navigation
-        player.focus();
     }).catch((err: any) => {
         console.error("Ruffle load error:", err);
     });
 
-    // Touch navigation helper for iPad/Touch devices
-    const handleTouchStart = (e: TouchEvent) => {
-      if (!playerRef.current) return;
-      
-      const touch = e.touches[0];
-      const width = containerRef.current?.clientWidth || window.innerWidth;
-      const height = containerRef.current?.clientHeight || window.innerHeight;
-      const x = touch.clientX;
-      const y = touch.clientY;
-
-      // Only handle if in the bottom-ish area where buttons usually are, or generally the sides
-      // To avoid double-triggering when actually hitting an internal button, 
-      // we only trigger if NOT hitting the bottom control bar area if we can guess it.
-      // But user said "touch screen to navigate", so let's do sides.
-      
-      const isRightSide = x > width * 0.7;
-      const isLeftSide = x < width * 0.3;
-      
-      if (isRightSide || isLeftSide) {
-        // e.preventDefault(); // Don't prevent, so Flash gets the touch too for sound unlocking
-        const direction = isRightSide ? 'next' : 'prev';
-        handleNavigation(direction);
-      }
-    };
-
-    containerRef.current.addEventListener('touchstart', handleTouchStart, { passive: true });
-
     return () => {
       // Restore fetch
       window.fetch = originalFetch;
-      if (containerRef.current) {
-        containerRef.current.removeEventListener('touchstart', handleTouchStart);
-      }
       if (playerRef.current) {
         playerRef.current.remove();
         playerRef.current = null;
@@ -186,27 +148,6 @@ export const CBTPlayer = React.memo<CBTPlayerProps>(({ file, allFiles }) => {
       </div>
     );
   }
-
-  const handleNavigation = (direction: 'next' | 'prev') => {
-    if (!playerRef.current) return;
-    
-    // Focus player first to ensure key events are received
-    playerRef.current.focus();
-
-    const key = direction === 'next' ? 'ArrowRight' : 'ArrowLeft';
-    const altKey = direction === 'next' ? 'PageDown' : 'PageUp';
-
-    // Dispatch both to cover different SWF navigation implementations
-    [key, altKey].forEach(k => {
-      const event = new KeyboardEvent('keydown', {
-        key: k,
-        code: k,
-        bubbles: true,
-        cancelable: true
-      });
-      playerRef.current.dispatchEvent(event);
-    });
-  };
 
   return (
     <div className="relative w-full h-full bg-[#121212] flex items-center justify-center overflow-hidden">
