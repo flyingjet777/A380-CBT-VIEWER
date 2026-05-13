@@ -3,7 +3,7 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches:
-      - main  # ë¦¬í ¬ì§€í† ë¦¬ì ˜ ë©”ì ¸ ë¸Œëžœì¹˜ ì ´ë¦„ì—  ë§žì¶° ìˆ˜ì •í•˜ì„¸ìš” (main ë˜ ëŠ” master)
+      - main
 
 permissions:
   contents: read

@@ -1,5 +1,10 @@
 import firebaseConfig from '../../firebase-applet-config.json';
 
+// @ts-ignore
+const client_id = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+// @ts-ignore
+const api_key = import.meta.env.VITE_GOOGLE_API_KEY || '';
+
 let tokenClient: any = null;
 let authInitialized = false;
 
@@ -10,7 +15,7 @@ let tokenExpiryTime: number | null = null; // Timestamp in ms
 export const initAuth = () => {
   if (authInitialized) return;
 
-  const clientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) || '';
+  const clientId = client_id;
   if (!clientId) {
     return;
   }
@@ -102,7 +107,7 @@ export const clearCachedToken = () => {
   tokenExpiryTime = null;
 };
 
-const GOOGLE_API_KEY = (import.meta.env.VITE_GOOGLE_API_KEY as string) || '';
+const GOOGLE_API_KEY = api_key;
 
 export interface DriveFile {
   id: string;

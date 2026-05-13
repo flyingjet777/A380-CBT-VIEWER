@@ -2,7 +2,7 @@
   "name": "Airbus CBT Emulator",
   "short_name": "A380 CBT",
   "description": "Emulate Airbus A380 CBT training archives directly in your browser.",
-  "start_url": "/",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#fdfaf6",
   "theme_color": "#fb923c",

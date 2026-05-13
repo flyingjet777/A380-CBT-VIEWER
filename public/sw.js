@@ -1,7 +1,7 @@
 const CACHE_NAME = 'a380-cbt-v1';
 const ASSETS = [
-  '/',
-  '/index.html',
+  './',
+  'index.html',
   'https://unpkg.com/@ruffle-rs/ruffle',
 ];
 

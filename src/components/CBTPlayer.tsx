@@ -25,10 +25,21 @@ export const CBTPlayer = React.memo<CBTPlayerProps>(({ file, allFiles }) => {
     const interceptedFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
       
-      // Get the relative path Ruffle is asking for
-      let requestedPath = urlStr.replace(window.location.origin, '').replace(/^\//, '');
+      // Handle GitHub Pages and other subfolder deployments
+      // We need to strip the base path from the URL. 
+      // On GitHub pages, this is usually /repo-name/
+      const pathname = window.location.pathname;
+      const baseUrl = pathname.endsWith('/') ? pathname : pathname.substring(0, pathname.lastIndexOf('/') + 1);
+      const originWithBase = window.location.origin + baseUrl;
+      
+      let requestedPath = urlStr.replace(originWithBase, '');
+      // Fallback if originWithBase didn't match (e.g. absolute path from root)
+      if (requestedPath === urlStr) {
+          requestedPath = urlStr.replace(window.location.origin, '').replace(/^\//, '');
+      }
+
       // Remove any leading ./
-      requestedPath = requestedPath.replace(/^\.\//, '');
+      requestedPath = requestedPath.replace(/^\.\//, '').replace(/^\//, '');
       
       const fileName = requestedPath.split('/').pop() || '';
       const decodedFileName = decodeURIComponent(fileName);
@@ -122,7 +133,7 @@ export const CBTPlayer = React.memo<CBTPlayerProps>(({ file, allFiles }) => {
       allowScriptAccess: true,
       backgroundColor: "#000000",
       letterbox: "on",
-      base_url: window.location.origin // Ensure relative paths work
+      base_url: window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1)
     }).then(() => {
         console.log("Ruffle load successful");
     }).catch((err: any) => {
