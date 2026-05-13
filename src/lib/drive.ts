@@ -5,6 +5,13 @@ const client_id = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 // @ts-ignore
 const api_key = import.meta.env.VITE_GOOGLE_API_KEY || '';
 
+console.log('[Drive] Config Check:', { 
+  hasClientId: !!client_id, 
+  hasApiKey: !!api_key,
+  origin: window.location.origin,
+  pathname: window.location.pathname
+});
+
 let tokenClient: any = null;
 let authInitialized = false;
 
