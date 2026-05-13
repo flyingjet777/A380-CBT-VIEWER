@@ -25,16 +25,13 @@ export const CBTPlayer = React.memo<CBTPlayerProps>(({ file, allFiles }) => {
     const interceptedFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
       
-      // Handle GitHub Pages and other subfolder deployments
-      // We need to strip the base path from the URL. 
-      // On GitHub pages, this is usually /repo-name/
-      const pathname = window.location.pathname;
-      const baseUrl = pathname.endsWith('/') ? pathname : pathname.substring(0, pathname.lastIndexOf('/') + 1);
-      const originWithBase = window.location.origin + baseUrl;
+      // 1. Get the base path where the app is hosted (including the repo name on GitHub Pages)
+      const originWithBase = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
       
       let requestedPath = urlStr.replace(originWithBase, '');
-      // Fallback if originWithBase didn't match (e.g. absolute path from root)
-      if (requestedPath === urlStr) {
+      
+      // Fallback: If it's still an absolute URL (e.g. requested using a different domain or absolute path from root)
+      if (requestedPath.startsWith('http') || requestedPath.startsWith('//')) {
           requestedPath = urlStr.replace(window.location.origin, '').replace(/^\//, '');
       }
 
