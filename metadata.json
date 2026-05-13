@@ -1,0 +1,6 @@
+{
+  "name": "A380 CBT Emulator",
+  "description": "A web-based emulator for Airbus A380 Computer-Based Training (CBT) Flash programs. Supports loading from Google Drive and local ZIP files.",
+  "requestFramePermissions": ["identity-credentials-get"],
+  "majorCapabilities": []
+}
