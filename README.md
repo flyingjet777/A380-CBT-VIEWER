@@ -21,7 +21,13 @@
 - **API**: Google Drive API v3
 - **DevOps**: GitHub Actions (CI/CD) & GitHub Pages Deployment
 
-## 📱 기기별 최적화 사용법
+## 📱 기기별 최적화 사용법 및 외부 연동 (Notion/Obsidian)
+
+### 🔗 노션(Notion) & 옵시디안(Obsidian) 연동
+본 앱은 **URL 파라미터(`?url=`)**를 통한 자동 로딩 기능을 지원하므로, 노션이나 옵시디안에서 학습 대시보드를 구축하기에 적합합니다.
+- **Deep Link**: 특정 CBT ZIP 파일이 즉시 로드되는 링크를 생성하여 노션 데이터베이스에 저장할 수 있습니다.
+- **Obsidian Embedding**: `<iframe src="https://flyingjet777.github.io/A380-CBT-VIEWER/?url=파일주소" ...></iframe>`를 통해 개인 노트 안에서 직접 학습이 가능합니다.
+- **Copy Link**: 사이드바 하단의 `COPY_DEEP_LINK` 버튼을 통해 현재 학습 중인 모듈의 전용 링크를 즉시 복사할 수 있습니다.
 
 ### iPad / iPhone (Safari 권장)
 1. Safari 브라우저에서 배포된 URL([https://flyingjet777.github.io/A380-CBT-VIEWER/](https://flyingjet777.github.io/A380-CBT-VIEWER/))에 접속합니다.

@@ -11,6 +11,10 @@ import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, User as Fireba
 const EMPTY_MAP = new Map();
 
 export default function App() {
+  const [activeTab, setActiveTab] = useState<'LOCAL' | 'REMOTE'>('LOCAL');
+  const [remoteFiles, setRemoteFiles] = useState<{name: string, url: string}[]>([]);
+  const [vpsUrl, setVpsUrl] = useState<string>(localStorage.getItem('vps_root_url') || '');
+  const [isRemoteLoading, setIsRemoteLoading] = useState(false);
   const [archive, setArchive] = useState<CBTArchive | null>(null);
   const [selectedFile, setSelectedFile] = useState<CBTFile | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
@@ -33,8 +37,105 @@ export default function App() {
   useEffect(() => {
     initAuth();
     const unsubscribe = onAuthStateChanged(auth, (u) => setUser(u));
+
+    // Check for ?url= parameter to auto-load from VPS
+    const params = new URLSearchParams(window.location.search);
+    const remoteUrl = params.get('url');
+    if (remoteUrl) {
+      handleRemoteUrlLoad(remoteUrl);
+    }
+
+    if (vpsUrl) {
+      fetchRemoteFiles();
+    }
+
     return () => unsubscribe();
   }, []);
+
+  const fetchRemoteFiles = async () => {
+    const url = localStorage.getItem('vps_root_url');
+    if (!url) return;
+    
+    setIsRemoteLoading(true);
+    addLog(`REMOTE_SYNC: Synchronizing with VPS [${url}]`);
+    try {
+      // Expecting index.json in the VPS directory
+      const response = await fetch(`${url}/index.json`);
+      if (!response.ok) throw new Error("Index file not found");
+      const data = await response.json();
+      
+      // Sort files numerically by name
+      const sorted = Array.isArray(data) 
+        ? data.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }))
+        : data;
+        
+      setRemoteFiles(sorted);
+      addLog(`REMOTE_SYNC: Successfully indexed ${sorted.length} remote archives`);
+    } catch (err) {
+      addLog(`REMOTE_ERROR: Could not fetch archive list. Ensure CORS is enabled on ${url}`);
+      console.error(err);
+    } finally {
+      setIsRemoteLoading(false);
+    }
+  };
+
+  const handleUpdateVpsUrl = () => {
+    const url = window.prompt("Enter your VPS Root URL (e.g., https://your-vps.com/AIRBUS_CBT):", vpsUrl);
+    if (url) {
+      const sanitized = url.endsWith('/') ? url.slice(0, -1) : url;
+      setVpsUrl(sanitized);
+      localStorage.setItem('vps_root_url', sanitized);
+      fetchRemoteFiles();
+      setActiveTab('REMOTE');
+    }
+  };
+
+  const handleRemoteUrlLoad = async (url: string) => {
+    setIsExtracting(true);
+    setError(null);
+    addLog(`INIT_PROCEDURE: Fetching remote archive from ${url}`);
+    
+    // Update URL without reloading for deep linking support
+    const newUrl = new URL(window.location.href);
+    newUrl.searchParams.set('url', url);
+    window.history.replaceState({}, '', newUrl);
+
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP_ERROR: Status ${response.status}`);
+      
+      const buffer = await response.arrayBuffer();
+      const extractedArchive = await extractCBTArchive(buffer);
+      
+      const firstModuleKey = Array.from(extractedArchive.modules.keys())[0];
+      const firstFile = firstModuleKey ? extractedArchive.modules.get(firstModuleKey)?.[0] : null;
+
+      if (!firstFile) {
+        throw new Error("ARCHIVE_ERROR: No valid SWF training segments detected.");
+      }
+      
+      setArchive(extractedArchive);
+      setSelectedFile(firstFile);
+      
+      let totalSwfs = 0;
+      extractedArchive.modules.forEach(files => totalSwfs += files.length);
+      
+      addLog(`STATUS_OK: Synced ${totalSwfs} segments from remote source // VFS size ${extractedArchive.allFiles.size}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Remote fetch failed");
+      addLog(`FATAL_EXCEPTION: Remote loading failed. Check CORS settings on the source server.`);
+      console.error(err);
+    } finally {
+      setIsExtracting(false);
+    }
+  };
+
+  const handleUrlPrompt = () => {
+    const url = window.prompt("Enter the direct URL to the CBT ZIP file (Ensure CORS is enabled on the server):");
+    if (url) {
+      handleRemoteUrlLoad(url);
+    }
+  };
 
   const addLog = useCallback((msg: string) => {
     const timestamp = new Date().toLocaleTimeString();
@@ -140,8 +241,13 @@ export default function App() {
                          
       return nameMatch && !isExcluded;
     }).sort((a, b) => {
-      if (a.folder !== b.folder) return a.folder.localeCompare(b.folder);
-      return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+      // Prioritize numerical sorting across all files
+      // If folder is different but we want a unified list, we can just sort by name
+      // and then use folder as a secondary tie-breaker. 
+      // Most CBTs have numbering in the filename itself.
+      const nameCompare = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+      if (nameCompare !== 0) return nameCompare;
+      return a.folder.localeCompare(b.folder, undefined, { numeric: true });
     });
   }, [archive, searchQuery]);
 
@@ -227,55 +333,123 @@ export default function App() {
         {/* Sidebar: Flight Deck / Module Library */}
         {isSidebarOpen && !isFullscreen && (
           <aside className="w-[300px] md:w-[340px] bg-brand-sidebar border-r border-brand-border flex flex-col shrink-0 z-20 shadow-[20px_0_40px_rgba(0,0,0,0.3)]">
-            <div className="p-4 md:p-6">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] md:text-[12px] font-black text-brand-text-dim tracking-[0.3em] uppercase italic">Module Library</span>
-                  <span className="text-[9px] md:text-[10px] font-mono font-bold px-2 py-0.5 bg-brand-accent/10 text-brand-accent rounded border border-brand-accent/20">
-                    {filteredFiles.length} Segments
-                  </span>
-               </div>
+            <div className="p-4 md:p-6 pb-2">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-[11px] md:text-[12px] font-black text-brand-text-dim tracking-[0.3em] uppercase italic">System Library</span>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-2 p-1 bg-brand-bg/50 rounded-xl border border-brand-border h-10">
+                  <button 
+                    onClick={() => setActiveTab('LOCAL')}
+                    className={`text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${activeTab === 'LOCAL' ? 'bg-white text-brand-accent shadow-sm' : 'text-brand-text-dim hover:text-brand-text'}`}
+                  >
+                    Local
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setActiveTab('REMOTE');
+                      if (!vpsUrl) handleUpdateVpsUrl();
+                    }}
+                    className={`text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${activeTab === 'REMOTE' ? 'bg-white text-brand-accent shadow-sm' : 'text-brand-text-dim hover:text-brand-text'}`}
+                  >
+                    Remote
+                  </button>
+                </div>
             </div>
 
             <div className="flex-1 flex flex-col overflow-y-auto px-2 space-y-2 custom-scrollbar pb-10 scroll-smooth overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
-              {filteredFiles.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center opacity-10 px-10 text-center grayscale py-20">
-                  <FileArchive className="w-12 md:w-16 h-12 md:h-16 mb-6 text-brand-text-dim" />
-                  <p className="text-[10px] md:text-xs font-black tracking-[0.5em] uppercase leading-loose">Awaiting Archive <br/> Insertion</p>
-                </div>
-              ) : (
+              {activeTab === 'LOCAL' ? (
+                filteredFiles.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center opacity-10 px-10 text-center grayscale py-20">
+                    <FileArchive className="w-12 md:w-16 h-12 md:h-16 mb-6 text-brand-text-dim" />
+                    <p className="text-[10px] md:text-xs font-black tracking-[0.5em] uppercase leading-loose">Awaiting Local <br/> Archive</p>
+                  </div>
+                ) : (
                   filteredFiles.map((swf, i) => (
-                  <button
-                    key={swf.path}
-                    onClick={() => setSelectedFile(swf)}
-                    className={`w-full text-left p-3 md:p-4 rounded-2xl border-2 cursor-pointer group mb-2 relative overflow-hidden transition-all ${
-                      selectedFile?.path === swf.path 
-                      ? 'bg-white border-brand-accent shadow-lg z-10' 
-                      : 'bg-transparent border-transparent hover:bg-white hover:border-brand-border'
-                    }`}
-                  >
-                    {selectedFile?.path === swf.path && (
-                       <div className="absolute top-0 left-0 w-1.5 h-full bg-brand-accent"></div>
-                    )}
-                    <div className="flex items-center justify-between mb-1 md:mb-2">
-                      <span className={`text-[12px] md:text-[14px] font-black truncate leading-tight tracking-tight pr-4 ${selectedFile?.path === swf.path ? 'text-brand-accent' : 'text-brand-text'}`}>
-                        {swf.name.replace('.swf', '')}
-                      </span>
+                    <button
+                      key={swf.path}
+                      onClick={() => setSelectedFile(swf)}
+                      className={`w-full text-left p-3 md:p-4 rounded-2xl border-2 cursor-pointer group mb-2 relative overflow-hidden transition-all ${
+                        selectedFile?.path === swf.path 
+                        ? 'bg-white border-brand-accent shadow-lg z-10' 
+                        : 'bg-transparent border-transparent hover:bg-white hover:border-brand-border'
+                      }`}
+                    >
+                      {selectedFile?.path === swf.path && (
+                         <div className="absolute top-0 left-0 w-1.5 h-full bg-brand-accent"></div>
+                      )}
+                      <div className="flex items-center justify-between mb-1 md:mb-2">
+                        <span className={`text-[12px] md:text-[14px] font-black truncate leading-tight tracking-tight pr-4 ${selectedFile?.path === swf.path ? 'text-brand-accent' : 'text-brand-text'}`}>
+                          {swf.name.replace('.swf', '')}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 md:gap-3">
+                        <div className="px-2 py-0.5 bg-slate-100 rounded-md text-[8px] md:text-[9px] font-black font-mono text-brand-text-dim uppercase tracking-tighter">SEG_{String(i + 1).padStart(3, '0')}</div>
+                        <p className="text-[9px] md:text-[10px] text-brand-text-muted/70 truncate font-bold italic tracking-wider uppercase opacity-50">{swf.folder ? swf.folder.split('/').pop() : 'ROOT'}</p>
+                      </div>
+                    </button>
+                  ))
+                )
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <div className="px-4 py-3 bg-brand-accent/5 rounded-xl border border-brand-accent/20 flex items-center justify-between mb-2">
+                    <div className="flex flex-col">
+                      <span className="text-[8px] font-black text-brand-accent uppercase tracking-widest">Connected Server</span>
+                      <span className="text-[10px] font-bold text-brand-text truncate max-w-[150px]">{vpsUrl || 'NOT_CONNECTED'}</span>
                     </div>
-                    <div className="flex items-center gap-2 md:gap-3">
-                      <div className="px-2 py-0.5 bg-slate-100 rounded-md text-[8px] md:text-[9px] font-black font-mono text-brand-text-dim uppercase tracking-tighter">SEG_{String(i + 1).padStart(3, '0')}</div>
-                      <p className="text-[9px] md:text-[10px] text-brand-text-muted/70 truncate font-bold italic tracking-wider uppercase opacity-50">{swf.folder ? swf.folder.split('/').pop() : 'ROOT'}</p>
+                    <button 
+                      onClick={handleUpdateVpsUrl}
+                      className="p-2 hover:bg-brand-accent/10 rounded-lg text-brand-accent transition-all"
+                    >
+                      <Terminal className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {isRemoteLoading ? (
+                    <div className="py-10 flex flex-col items-center justify-center opacity-50">
+                      <div className="w-6 h-6 border-2 border-brand-accent border-t-transparent rounded-full animate-spin mb-4"></div>
+                      <span className="text-[10px] font-black uppercase tracking-widest">Scanning VPS...</span>
                     </div>
-                  </button>
-                ))
+                  ) : remoteFiles.length === 0 ? (
+                    <div className="py-20 flex flex-col items-center justify-center opacity-10 text-center px-10">
+                      <Cloud className="w-12 h-12 mb-4" />
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em]">No remote files detected or index.json missing</p>
+                    </div>
+                  ) : (
+                    remoteFiles.map((file, i) => (
+                      <button
+                        key={i}
+                        onClick={() => handleRemoteUrlLoad(file.url)}
+                        className="w-full text-left p-4 bg-white hover:bg-slate-50 rounded-2xl border border-brand-border hover:border-brand-accent transition-all group flex items-center gap-4"
+                      >
+                        <div className="w-10 h-10 bg-brand-accent/5 rounded-xl flex items-center justify-center group-hover:bg-brand-accent/10 transition-colors">
+                          <FileArchive className="w-5 h-5 text-brand-accent" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12px] font-black text-brand-text truncate uppercase tracking-tight">{file.name}</p>
+                          <p className="text-[9px] font-bold text-brand-text-dim truncate opacity-50">{file.url}</p>
+                        </div>
+                        <Play className="w-4 h-4 text-brand-text-dim opacity-0 group-hover:opacity-100 transition-all" />
+                      </button>
+                    ))
+                  )}
+                </div>
               )}
             </div>
 
-            <div className="h-16 md:h-20 px-4 md:px-6 bg-brand-sidebar flex items-center shrink-0">
+            <div className="h-24 md:h-32 px-4 md:px-6 bg-brand-sidebar flex flex-col justify-center gap-2 shrink-0 border-t border-brand-border">
               <label className="w-full py-2 md:py-2.5 bg-brand-accent hover:bg-orange-600 text-white rounded-xl text-[9px] md:text-[10px] font-black tracking-[0.2em] flex items-center justify-center gap-2 cursor-pointer shadow-xl shadow-brand-accent/10 active:scale-95 group relative overflow-hidden transition-all">
                 <Upload className="w-3.5 h-3.5 md:w-4 md:h-4" />
                 IMPORT_LOCAL
                 <input type="file" accept=".zip" onChange={handleZipUpload} className="hidden" />
               </label>
+              <button 
+                onClick={handleUrlPrompt}
+                className="w-full py-2 md:py-2.5 bg-brand-surface hover:bg-slate-50 text-brand-text border border-brand-border rounded-xl text-[9px] md:text-[10px] font-black tracking-[0.2em] flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all"
+              >
+                <Terminal className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                IMPORT_REMOTE
+              </button>
             </div>
           </aside>
         )}

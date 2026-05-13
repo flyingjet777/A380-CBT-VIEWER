@@ -28,30 +28,33 @@ export const CBTPlayer = React.memo<CBTPlayerProps>(({ file, allFiles }) => {
       // 1. Get the base path where the app is hosted (including the repo name on GitHub Pages)
       const originWithBase = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
       
+      // Bypass VFS for Ruffle internal files (WASM, JS chunks) or non-relevant domains
+      if (urlStr.includes('ruffle') || urlStr.endsWith('.wasm') || urlStr.endsWith('.js') || (urlStr.startsWith('http') && !urlStr.startsWith(window.location.origin))) {
+          return originalFetch(input, init);
+      }
+
       let requestedPath = urlStr.replace(originWithBase, '');
       
-      // Fallback: If it's still an absolute URL (e.g. requested using a different domain or absolute path from root)
+      // Fallback: If it's still an absolute URL (e.g. requested using absolute path from root)
       if (requestedPath.startsWith('http') || requestedPath.startsWith('//')) {
           requestedPath = urlStr.replace(window.location.origin, '').replace(/^\//, '');
       }
 
-      // Remove any leading ./
-      requestedPath = requestedPath.replace(/^\.\//, '').replace(/^\//, '');
+      // Remove any leading ./ or /
+      requestedPath = requestedPath.replace(/^(\.|\/)+/, '');
       
-      const fileName = requestedPath.split('/').pop() || '';
-      const decodedFileName = decodeURIComponent(fileName);
+      if (!requestedPath) return originalFetch(input, init);
+
       const decodedRequestedPath = decodeURIComponent(requestedPath);
 
-      // 1. Try exact path match (if Ruffle provides a path starting from root)
+      // 1. Try exact path match
       let matchedFile = allFiles.get(decodedRequestedPath);
 
       // 2. Try matching relative to the current SWF folder
-      // This handles both absolute-looking paths (missing root folder) and relative ones
       if (!matchedFile && file.folder) {
           const relativePath = `${file.folder}/${decodedRequestedPath}`.replace(/\/+/g, '/');
           matchedFile = allFiles.get(relativePath);
           
-          // Also try relative to the parent of the SWF if the SWF is deep in a folder
           if (!matchedFile) {
             const folderParts = file.folder.split('/');
             folderParts.pop();
@@ -61,10 +64,15 @@ export const CBTPlayer = React.memo<CBTPlayerProps>(({ file, allFiles }) => {
           }
       }
 
-      // 3. Last ditch: If they are requesting just a filename, try to find it in the SAME folder as the host file
-      if (!matchedFile && !decodedRequestedPath.includes('/')) {
-          const localPath = file.folder ? `${file.folder}/${decodedRequestedPath}` : decodedRequestedPath;
-          matchedFile = allFiles.get(localPath);
+      // 3. Case-insensitive fallback (crucial for Zip files created on Windows)
+      if (!matchedFile) {
+          const lowerPath = decodedRequestedPath.toLowerCase();
+          for (const [path, f] of allFiles.entries()) {
+              if (path.toLowerCase() === lowerPath || path.toLowerCase().endsWith('/' + lowerPath)) {
+                  matchedFile = f;
+                  break;
+              }
+          }
       }
 
       if (matchedFile) {
@@ -86,6 +94,11 @@ export const CBTPlayer = React.memo<CBTPlayerProps>(({ file, allFiles }) => {
           statusText: 'OK',
           headers: responseHeaders
         });
+      }
+
+      const isExternal = urlStr.startsWith('http') && !urlStr.startsWith(window.location.origin);
+      if (!isExternal) {
+          console.warn(`[VFS] File NOT found: ${decodedRequestedPath} (Original: ${urlStr})`);
       }
 
       return originalFetch(input, init);
