@@ -3,9 +3,7 @@ import { Upload, FileArchive, ChevronRight, HardDrive, Info, Play, Cloud, Search
 import { extractCBTArchive } from './lib/zipUtils.ts';
 import { CBTFile, CBTArchive } from './types.ts';
 import { CBTPlayer } from './components/CBTPlayer.tsx';
-import { NetworkDriveModal } from './components/NetworkDriveModal';
 import { VpsAuthModal } from './components/VpsAuthModal';
-import { initAuth } from './lib/drive';
 import { auth } from './lib/firebase';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, User as FirebaseUser } from 'firebase/auth';
 
@@ -24,7 +22,6 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [logs, setLogs] = useState<string[]>([]);
-  const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
   const [isVpsModalOpen, setIsVpsModalOpen] = useState(false);
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -39,7 +36,6 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    initAuth();
     const unsubscribe = onAuthStateChanged(auth, (u) => setUser(u));
 
     // Check for ?url= parameter to auto-load from VPS
@@ -198,34 +194,6 @@ export default function App() {
     });
   };
 
-  const handleDriveFileSelect = async (fileData: ArrayBuffer, fileName: string) => {
-    setIsExtracting(true);
-    addLog(`INIT_PROCEDURE: Starting Drive extraction for ${fileName}`);
-    try {
-      const extractedArchive = await extractCBTArchive(fileData);
-      
-      const firstModuleKey = Array.from(extractedArchive.modules.keys())[0];
-      const firstFile = firstModuleKey ? extractedArchive.modules.get(firstModuleKey)?.[0] : null;
-
-      if (!firstFile) {
-        throw new Error("ARCHIVE_ERROR: No valid SWF training segments detected.");
-      }
-      
-      setArchive(extractedArchive);
-      setSelectedFile(firstFile);
-
-      let totalSwfs = 0;
-      extractedArchive.modules.forEach(files => totalSwfs += files.length);
-      
-      addLog(`STATUS_OK: Synced ${totalSwfs} segments across ${extractedArchive.modules.size} modules // Drive Uplink Active`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Archive extraction failed");
-      addLog(`FATAL_EXCEPTION: Drive Parsing failed.`);
-      console.error(err);
-    } finally {
-      setIsExtracting(false);
-    }
-  };
 
   // Filter and Sort Logic for Module Library
   const filteredFiles = React.useMemo(() => {
@@ -296,19 +264,10 @@ export default function App() {
                 <span className="text-brand-text-dim">EMULATION_CORE_STABLE</span>
                 <span className="text-green-500">UPLINK_ENCRYPTED_256</span>
              </div>
-             
+
              <div className="hidden md:block w-px h-8 bg-brand-border"></div>
 
-             <button
-              onClick={() => setIsDriveModalOpen(true)}
-              className="px-3 md:px-5 py-2 md:py-2.5 bg-brand-accent/10 hover:bg-brand-accent/20 border border-brand-accent/40 rounded-xl text-[9px] md:text-[10px] font-black tracking-[0.1em] md:tracking-[0.2em] text-brand-accent flex items-center gap-2 md:gap-3 transition-all hover:scale-105 active:scale-95 shadow-lg shadow-brand-accent/5"
-            >
-              <Cloud className="w-3.5 h-3.5 md:w-4 md:h-4" />
-              <span className="hidden xs:inline">NETWORK_DRIVE</span>
-              <span className="xs:hidden">DRIVE</span>
-            </button>
-
-            <button 
+            <button
               onClick={handleGoogleLogin}
               className={`p-2 md:p-2.5 rounded-xl border flex items-center justify-center gap-2 md:gap-3 transition-all ${
                 user 
@@ -323,12 +282,6 @@ export default function App() {
           </div>
         </header>
       )}
-
-      <NetworkDriveModal
-        isOpen={isDriveModalOpen}
-        onClose={() => setIsDriveModalOpen(false)}
-        onFileSelect={handleDriveFileSelect}
-      />
 
       <VpsAuthModal
         isOpen={isVpsModalOpen}
