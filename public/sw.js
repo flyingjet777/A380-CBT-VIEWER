@@ -1,13 +1,7 @@
-const CACHE_NAME = 'a380-cbt-v2';
-const STATIC_ASSETS = [
-  'https://unpkg.com/@ruffle-rs/ruffle',
-];
+const CACHE_NAME = 'a380-cbt-v3';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
-  );
 });
 
 self.addEventListener('activate', (event) => {
@@ -20,13 +14,32 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const req = event.request;
+
+  // HTML 네비게이션: 네트워크 우선, 실패 시 캐시
   if (req.mode === 'navigate') {
     event.respondWith(
-      fetch(req).catch(() => caches.match('index.html'))
+      fetch(req)
+        .then(res => {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then(c => c.put(req, clone));
+          return res;
+        })
+        .catch(() => caches.match(req))
     );
     return;
   }
+
+  // 그 외 (Ruffle, JS, CSS 등): 캐시 우선, 네트워크 폴백 후 캐시 저장
   event.respondWith(
-    caches.match(req).then((cached) => cached || fetch(req))
+    caches.match(req).then(cached => {
+      if (cached) return cached;
+      return fetch(req).then(res => {
+        if (res.ok) {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then(c => c.put(req, clone));
+        }
+        return res;
+      });
+    })
   );
 });
