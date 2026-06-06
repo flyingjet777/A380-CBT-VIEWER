@@ -4,6 +4,7 @@ import { extractCBTArchive } from './lib/zipUtils.ts';
 import { CBTFile, CBTArchive } from './types.ts';
 import { CBTPlayer } from './components/CBTPlayer.tsx';
 import { NetworkDriveModal } from './components/NetworkDriveModal';
+import { VpsAuthModal } from './components/VpsAuthModal';
 import { initAuth } from './lib/drive';
 import { auth } from './lib/firebase';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, User as FirebaseUser } from 'firebase/auth';
@@ -24,6 +25,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [logs, setLogs] = useState<string[]>([]);
   const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
+  const [isVpsModalOpen, setIsVpsModalOpen] = useState(false);
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -102,7 +104,9 @@ export default function App() {
     window.history.replaceState({}, '', newUrl);
 
     try {
-      const response = await fetch(url, { credentials: 'include' });
+      const authHeader = localStorage.getItem('vps_auth_header');
+      const headers: HeadersInit = authHeader ? { 'Authorization': authHeader } : {};
+      const response = await fetch(url, { headers });
       if (!response.ok) throw new Error(`HTTP_ERROR: Status ${response.status}`);
       
       const buffer = await response.arrayBuffer();
@@ -320,10 +324,17 @@ export default function App() {
         </header>
       )}
 
-      <NetworkDriveModal 
+      <NetworkDriveModal
         isOpen={isDriveModalOpen}
         onClose={() => setIsDriveModalOpen(false)}
         onFileSelect={handleDriveFileSelect}
+      />
+
+      <VpsAuthModal
+        isOpen={isVpsModalOpen}
+        onClose={() => setIsVpsModalOpen(false)}
+        onFileSelect={(url, _auth) => handleRemoteUrlLoad(url)}
+        serverUrl={DEFAULT_VPS_URL}
       />
 
       <div className="flex flex-1 overflow-hidden relative">
@@ -440,12 +451,8 @@ export default function App() {
                 IMPORT_LOCAL
                 <input type="file" accept=".zip" onChange={handleZipUpload} className="hidden" />
               </label>
-              <button 
-                onClick={() => {
-                  setActiveTab('REMOTE');
-                  setIsSidebarOpen(true);
-                  fetchRemoteFiles();
-                }}
+              <button
+                onClick={() => setIsVpsModalOpen(true)}
                 className="w-full py-2 md:py-2.5 bg-brand-surface hover:bg-slate-50 text-brand-text border border-brand-border rounded-xl text-[9px] md:text-[10px] font-black tracking-[0.2em] flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all"
               >
                 <Terminal className="w-3.5 h-3.5 md:w-4 md:h-4" />
