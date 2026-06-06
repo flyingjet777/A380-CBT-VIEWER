@@ -9,22 +9,22 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#fb923c">
-    <script src="https://unpkg.com/@ruffle-rs/ruffle"></script>
+    <script src="./ruffle/ruffle.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js')
-        .catch(err => console.log('SW registration failed', err));
-    });
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      window.location.reload();
-    });
-  }
-</script>  </head>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('sw.js')
+            .catch(err => console.log('SW registration failed', err));
+        });
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          window.location.reload();
+        });
+      }
+    </script>
+  </head>
   <body>
     <div id="root"></div>
     <script type="module" src="src/main.tsx"></script>
   </body>
 </html>
-
