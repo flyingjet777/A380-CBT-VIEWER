@@ -8,12 +8,14 @@ import { initAuth } from './lib/drive';
 import { auth } from './lib/firebase';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, User as FirebaseUser } from 'firebase/auth';
 
+const DEFAULT_VPS_URL = 'https://airbus380cbt.com';
+
 const EMPTY_MAP = new Map();
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'LOCAL' | 'REMOTE'>('LOCAL');
   const [remoteFiles, setRemoteFiles] = useState<{name: string, url: string}[]>([]);
-  const [vpsUrl, setVpsUrl] = useState<string>(localStorage.getItem('vps_root_url') || '');
+  const [vpsUrl, setVpsUrl] = useState<string>(localStorage.getItem('vps_root_url') || DEFAULT_VPS_URL);
   const [isRemoteLoading, setIsRemoteLoading] = useState(false);
   const [archive, setArchive] = useState<CBTArchive | null>(null);
   const [selectedFile, setSelectedFile] = useState<CBTFile | null>(null);
@@ -53,14 +55,13 @@ export default function App() {
   }, []);
 
   const fetchRemoteFiles = async () => {
-    const url = localStorage.getItem('vps_root_url');
-    if (!url) return;
+    const url = localStorage.getItem('vps_root_url') || DEFAULT_VPS_URL;
     
     setIsRemoteLoading(true);
     addLog(`REMOTE_SYNC: Synchronizing with VPS [${url}]`);
     try {
       // Expecting index.json in the VPS directory
-      const response = await fetch(`${url}/index.json`);
+      const response = await fetch(`${url}/index.json`, { credentials: 'include' });
       if (!response.ok) throw new Error("Index file not found");
       const data = await response.json();
       
@@ -101,7 +102,7 @@ export default function App() {
     window.history.replaceState({}, '', newUrl);
 
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, { credentials: 'include' });
       if (!response.ok) throw new Error(`HTTP_ERROR: Status ${response.status}`);
       
       const buffer = await response.arrayBuffer();
@@ -241,10 +242,6 @@ export default function App() {
                          
       return nameMatch && !isExcluded;
     }).sort((a, b) => {
-      // Prioritize numerical sorting across all files
-      // If folder is different but we want a unified list, we can just sort by name
-      // and then use folder as a secondary tie-breaker. 
-      // Most CBTs have numbering in the filename itself.
       const nameCompare = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
       if (nameCompare !== 0) return nameCompare;
       return a.folder.localeCompare(b.folder, undefined, { numeric: true });
@@ -444,7 +441,11 @@ export default function App() {
                 <input type="file" accept=".zip" onChange={handleZipUpload} className="hidden" />
               </label>
               <button 
-                onClick={handleUrlPrompt}
+                onClick={() => {
+                  setActiveTab('REMOTE');
+                  setIsSidebarOpen(true);
+                  fetchRemoteFiles();
+                }}
                 className="w-full py-2 md:py-2.5 bg-brand-surface hover:bg-slate-50 text-brand-text border border-brand-border rounded-xl text-[9px] md:text-[10px] font-black tracking-[0.2em] flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all"
               >
                 <Terminal className="w-3.5 h-3.5 md:w-4 md:h-4" />
@@ -497,7 +498,6 @@ export default function App() {
                 </button>
               )}
               
-              {/* Augmented Presence HUD - Refined for minimalism */}
               {selectedFile && (
                 <div className="absolute top-4 left-4 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                   <div className="flex flex-col gap-1">
